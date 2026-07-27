@@ -338,7 +338,14 @@ func (cli *Client) SendMessage(ctx context.Context, to types.JID, message *waE2E
 		}
 	} else if to.Server == types.BotServer {
 		ownID = cli.getOwnLID()
-	} else if to.Server == types.DefaultUserServer && !req.Peer {
+	} else if to.Server == types.DefaultUserServer && cli.Store.LIDMigrationTimestamp > 0 && !req.Peer {
+		// PersonalAssistant patch: restore the LIDMigrationTimestamp guard that upstream
+		// removed in 4f8f64e ("send: always use LID for DMs"). Without it, DMs to a PN are
+		// unconditionally re-addressed to the recipient's LID and sent from our own LID even
+		// when this account has NOT been LID-migrated (LIDMigrationTimestamp == 0). Recipients
+		// cannot map that LID identity and render every reply as "Waiting for this message"
+		// (one-directional outbound-encryption break; session re-negotiation does not fix it).
+		// Once WhatsApp actually migrates this account (timestamp > 0), LID DMs resume here.
 		start := time.Now()
 		var toLID types.JID
 		toLID, err = cli.Store.LIDs.GetLIDForPN(ctx, to)
